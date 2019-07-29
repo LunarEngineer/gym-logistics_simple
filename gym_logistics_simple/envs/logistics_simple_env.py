@@ -7,6 +7,9 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 from math import sqrt
 
+
+
+#https://github.com/pybox2d/pybox2d/blob/master/examples/simple/simple_01.py
 FPS = 50
 SCALE = 30.0
 
@@ -17,9 +20,19 @@ class LogEnv(gym.Env):
   """
   This requires at least Python 3.6.
   """
-  metadata = {'render.modes':['human']}
+  metadata = {
+    'render.modes':['human', 'rgb_array'],
+    'video.frames_per_second': FPS
+  }
 
-  def __init__(self, n: int = 20, r: float = 1.0, mapSize: float = 10.0):
+  def __init__(self,
+               n: int = 20,
+               r: float = 1.0,
+               mapSize: float = 10.0,
+               customers: int = 8,
+               supply_limit: float = 100.0,
+               supply_classes: int = 10,
+               truck_framework: list = None):
     """
     Parameters
     ----------
@@ -29,7 +42,24 @@ class LogEnv(gym.Env):
         Used in making a road network.
     mapSize : float, default 10.0
         Used in making a road network.
+    customers : int, default 8
+        The number of customers in the network.
+    supply_limit : float, default 100.0
+        The total amount of supply a customer may have in any class
+    supply_classes : int, default 10
+        The total different 'classes' of supply.
+    truck_framework : list, default None
+        This is a n-length list of trucks with n dictionaries each
+        containing 'allowed_supplies': a boolean vector of length
+        supply_classes, and 'supply_limit': a float 'weight' limit.
     """
+    self.seed()
+    self.viewer = None
+    self.world = Box2D.b2World()
+    self.customers = [] # This probably needs to be in 'reset' function
+    # This problem assumes an unlimited amount of supply at the depot
+    self.depot = (mapSize / 2.0, mapSize / 2.0)
+    self.observation_space = spaces.Box(0.0, supply_limit, shape=(customers,2 + supply_classes), dtype=np.float32)
     ################################################################
     # Create the road network. This creates a dictionary keyed by
     #  (X,Y) coordinate of the node in question with each element
@@ -115,6 +145,15 @@ class LogEnv(gym.Env):
   def reset(self):
 
   def render(self, mode='human'):
+    from gym.envs.classic_control import rendering
+    # Create the basic window
+    if self.viewer is None:
+      self.viewer = rendering.Viewer(VIEWPORT_W, VIEWPORT_H)
+      self.viewer.set_bounds(0, VIEWPORT_W/SCALE, 0, VIEWPORT_H/SCALE)
+
+    # Make a blob for each customer
+    for c in self.customers:
+      self.viewer.draw_circle()
 
   def close(self):
 
