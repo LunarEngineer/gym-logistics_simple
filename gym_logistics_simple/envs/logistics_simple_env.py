@@ -1,8 +1,9 @@
 import gym
 import numpy as np
 import random
-from Box2D.b2 import circleShape
-from igraph import Graph
+# from Box2D.b2 import circleShape
+# from igraph import Graph
+from time import sleep
 from gym import error, spaces, utils
 from gym.utils import seeding
 from math import sqrt
@@ -13,8 +14,8 @@ from math import sqrt
 FPS = 50
 SCALE = 30.0
 
-VIEWPORT_W = 600
-VIEWPORT_H = 400
+VIEWPORT_W = 640
+VIEWPORT_H = 480
 
 class LogEnv(gym.Env):
   """
@@ -55,19 +56,26 @@ class LogEnv(gym.Env):
     """
     self.seed()
     self.viewer = None
-    self.world = Box2D.b2World()
-    self.customers = [] # This probably needs to be in 'reset' function
+    # self.world = Box2D.b2World()
     # This problem assumes an unlimited amount of supply at the depot
     self.depot = (mapSize / 2.0, mapSize / 2.0)
-    self.observation_space = spaces.Box(0.0, supply_limit, shape=(customers,2 + supply_classes), dtype=np.float32)
-    ################################################################
-    # Create the road network. This creates a dictionary keyed by
-    #  (X,Y) coordinate of the node in question with each element
-    #  a list of connected nodes.
-    #  e.g {(NodeA):[NodeB,...,NodeZ]}
-    ################################################################
-    self.network = makeRoadNetwork(n,r,mapSize)
+    self.mapSize = mapSize
+    self.observation_space = spaces.Box(0.0,
+                                        supply_limit,
+                                        shape=(customers,2 + supply_classes),
+                                        dtype=np.float32)
+    # Create the road network
+    self.network = self.makeRoadNetwork(n,r,mapSize)
     # I need a number of customers and a logistics hub
+    self.customers = [Customer(self.network,
+                               supply_classes,
+                               supply_limit) for _ in range(customers)]
+    # nodes: dict,
+    #            num_classes: int = 10,
+    #            supply_limit: float = 100.0,
+    #            greediness_mu: float = 1.0,
+    #            greediness_sigma: float = 0.5,
+    #            seed = None
   def makeRoadNetwork(self,n,r,m):
     """ Creates a road network for the logistics environment
 
@@ -141,23 +149,46 @@ class LogEnv(gym.Env):
     return(node_dict)
 
   def step(self, action):
-
+    print("Nothing")
   def reset(self):
+    for customer in self.customers:
+      customer.reset()
 
   def render(self, mode='human'):
     from gym.envs.classic_control import rendering
     # Create the basic window
+    world_width = self.mapSize
+    scale = VIEWPORT_W/VIEWPORT_H
+    customerSize = 5.0
+
     if self.viewer is None:
       self.viewer = rendering.Viewer(VIEWPORT_W, VIEWPORT_H)
-      self.viewer.set_bounds(0, VIEWPORT_W/SCALE, 0, VIEWPORT_H/SCALE)
-
+    
+    self.viewer.set_bounds(0.0,10.0,0.0,10.0)
     # Make a blob for each customer
+    # rod = rendering.make_capsule(1, .2)
+    # rod.set_color(.8, .3, .3)
+    # self.pole_transform = rendering.Transform()
+    # rod.add_attr(self.pole_transform)
+    # self.viewer.add_geom(rod)
+    for cust in self.customers:
+      dot = rendering.make_circle(.02)
+      dot.set_color(0,0,0)
+      dot.add_attr(rendering.Transform(translation=cust.location))
+      self.viewer.add_geom(dot)
+    # self.imgtrans = rendering.Transform()
+    # self.img.add_attr(self.imgtrans)
+    
+    return self.viewer.render(return_rgb_array = mode=='rgb_array') 
     for c in self.customers:
-      self.viewer.draw_circle()
-
+      print("FUCK")
+      # self.viewer.draw_circle()
+    print("Nothing")
   def close(self):
-
-class Truck():
+    print("Nothing")
+  def seed(self, seed=None):
+    self.np_random, seed = seeding.np_random(seed)
+# class Truck():
 
 class Customer():
   """
@@ -188,18 +219,23 @@ class Customer():
                num_classes: int = 10,
                supply_limit: float = 100.0,
                greediness_mu: float = 1.0,
-               greediness_sigma: float = 0.5
-               ):
+               greediness_sigma: float = 0.5,
+               seed = None):
     self.target = None
     self.nodes = nodes
-    self.location = random.choices([x for x in self.nodes])[0]
+    self.start_location = random.choices([x for x in self.nodes])[0]
     # Limit speed for customers.
     self.speed = 0.01
     self.supply_classes = num_classes
     self.supply_limit = supply_limit
-    self.supplies = np.full((num_classes),0.5 * supply_limit)
     self.supply_rate = np.random.normal(greediness_mu,greediness_sigma,size=(num_classes))
-  
+    self.reset()
+  def __repr__(self):
+    return(", ".join(["{}".format(x) for x in self.supplies]))
+  def reset(self):
+    self.location = self.start_location
+    self.supplies = np.full((self.supply_classes),0.5 * self.supply_limit)
+ 
   def happiness(self):
     """
     Simple linear happiness function. What proportion of supply am I missing?
@@ -254,3 +290,6 @@ def splitSquare(x):
   out = list([NW,NE,SW,SE])
   return(out)
 
+a = LogEnv()
+a.render()
+sleep(3)
