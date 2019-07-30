@@ -1,21 +1,25 @@
 import gym
 import numpy as np
+import pandas as pd
 import random
 # from Box2D.b2 import circleShape
 # from igraph import Graph
 from time import sleep
 from gym import error, spaces, utils
 from gym.utils import seeding
-from math import sqrt
 
+# Local import
+from customer import Customer
+from truck import Truck
+from helpers import splitSquare, makeName
 
-
-#https://github.com/pybox2d/pybox2d/blob/master/examples/simple/simple_01.py
 FPS = 50
 SCALE = 30.0
 
 VIEWPORT_W = 640
 VIEWPORT_H = 480
+
+
 
 class LogEnv(gym.Env):
   """
@@ -33,7 +37,8 @@ class LogEnv(gym.Env):
                customers: int = 8,
                supply_limit: float = 100.0,
                supply_classes: int = 10,
-               truck_framework: list = None):
+               truck_framework: dict = None,
+               seed: int = None):
     """
     Parameters
     ----------
@@ -49,14 +54,13 @@ class LogEnv(gym.Env):
         The total amount of supply a customer may have in any class
     supply_classes : int, default 10
         The total different 'classes' of supply.
-    truck_framework : list, default None
-        This is a n-length list of trucks with n dictionaries each
+    truck_framework : dict, default defaultTrucks
+        This is a n-length dictionary of trucks with n dictionaries each
         containing 'allowed_supplies': a boolean vector of length
         supply_classes, and 'supply_limit': a float 'weight' limit.
     """
-    self.seed()
+    self.seed(seed)
     self.viewer = None
-    # self.world = Box2D.b2World()
     # This problem assumes an unlimited amount of supply at the depot
     self.depot = (mapSize / 2.0, mapSize / 2.0)
     self.mapSize = mapSize
@@ -66,16 +70,58 @@ class LogEnv(gym.Env):
                                         dtype=np.float32)
     # Create the road network
     self.network = self.makeRoadNetwork(n,r,mapSize)
-    # I need a number of customers and a logistics hub
-    self.customers = [Customer(self.network,
-                               supply_classes,
-                               supply_limit) for _ in range(customers)]
-    # nodes: dict,
-    #            num_classes: int = 10,
-    #            supply_limit: float = 100.0,
-    #            greediness_mu: float = 1.0,
-    #            greediness_sigma: float = 0.5,
-    #            seed = None
+    # This array is used in rendering
+    self.lines = []
+    for k in self.network.keys():
+      for v in self.network[k]:
+        self.lines.append((k,v))
+    self.lines = list(set(map(lambda x: tuple(sorted(x)),self.lines)))
+    # Create all the hungry customers
+    self.customers = {}
+    for _ in range(customers):
+      custname = makeName()
+      while custname in self.customers:
+        custname = makeName()
+      self.customers[custname] = Customer(self.network,
+                                          supply_classes,
+                                          supply_limit,
+                                          greediness_mu=5./FPS,
+                                          greediness_sigma=0.5/FPS,
+                                          name=custname,
+                                          seed=seed)
+    # Create all the trucks
+    if truck_framework is None:
+      # This basic framework gives fuel to the tanker
+      #  and not the pickups and provides one LARGE semi
+      truck_framework = {
+        "Snorri's Datsun":{
+          "allowed_supplies": [0,1,1,1,1,1,0,1,1,1],
+          "supply_limit": 500.
+        },
+        "Jorgen's Nissan":{
+          "allowed_supplies": [0,1,1,1,1,1,0,1,1,1],
+          "supply_limit": 500.
+        },
+        "Glinda's Tanker":{
+          "allowed_supplies": [1,0,0,0,0,0,0,0,0,0],
+          "supply_limit": 2000.
+        },
+        "Jake's Semi":{
+          "allowed_supplies": [0,1,1,1,1,1,1,1,1,1],
+          "supply_limit": 2000.
+        }
+      }
+    self.trucks = {}
+    for truckname in truck_framework:
+      supply = truck_framework[truckname]["allowed_supplies"]
+      limit = truck_framework[truckname]["supply_limit"]
+      self.trucks[truckname] = Truck(nodes = self.network,
+                                     depot = self.depot,
+                                     supply_limit = limit,
+                                     allowed_supply = supply,
+                                     seed = seed,
+                                     name = truckname)
+    print(self.trucks)
   def makeRoadNetwork(self,n,r,m):
     """ Creates a road network for the logistics environment
 
@@ -88,6 +134,7 @@ class LogEnv(gym.Env):
      depth of that particular node. This is simply a weighted
      probability distribution that more strongly weights deeply
      nested nodes.
+     This MIGHT have to be seeded.
 
     Parameters
     ----------
@@ -149,7 +196,20 @@ class LogEnv(gym.Env):
     return(node_dict)
 
   def step(self, action):
-    print("Nothing")
+    newState = []
+    reward = 0
+    for customer in self.customers:
+      self.customers[customer].move()
+    reward = sum([self.customers[x].happiness() for x in self.customers])
+    custState = np.vstack([self.customers[x].getState() for x in self.customers])
+    done = reward==0
+    info = {}
+    # add some reward shaping for trucks....
+    return(custState,reward,done,info)
+    # print(custState.shape)
+    # This returns state, reward, done, info
+    # What *is* the state space. Each customer. That's it.
+
   def reset(self):
     for customer in self.customers:
       customer.reset()
@@ -159,137 +219,42 @@ class LogEnv(gym.Env):
     # Create the basic window
     world_width = self.mapSize
     scale = VIEWPORT_W/VIEWPORT_H
-    customerSize = 5.0
-
+    # customerSize = 5.0
+    
     if self.viewer is None:
+      # Start the viewer
       self.viewer = rendering.Viewer(VIEWPORT_W, VIEWPORT_H)
-    
-    self.viewer.set_bounds(0.0,10.0,0.0,10.0)
-    # Make a blob for each customer
-    # rod = rendering.make_capsule(1, .2)
-    # rod.set_color(.8, .3, .3)
-    # self.pole_transform = rendering.Transform()
-    # rod.add_attr(self.pole_transform)
-    # self.viewer.add_geom(rod)
+      self.viewer.set_bounds(-2.0,12.0,-2.0,12.0)
+      # Make the road lines
+      for road in self.lines:
+        r = rendering.Line(road[0],road[1])
+        self.viewer.add_geom(r)
     for cust in self.customers:
-      dot = rendering.make_circle(.02)
-      dot.set_color(0,0,0)
-      dot.add_attr(rendering.Transform(translation=cust.location))
-      self.viewer.add_geom(dot)
-    # self.imgtrans = rendering.Transform()
-    # self.img.add_attr(self.imgtrans)
-    
+      dot = self.viewer.draw_circle(radius=0.1)
+      h = self.customers[cust].happiness()
+      dot.set_color(1-h, h,.1)
+      dot.add_attr(rendering.Transform(translation=self.customers[cust].location))
     return self.viewer.render(return_rgb_array = mode=='rgb_array') 
-    for c in self.customers:
-      print("FUCK")
-      # self.viewer.draw_circle()
-    print("Nothing")
+
+
   def close(self):
-    print("Nothing")
+    if self.viewer:
+      self.viewer.close()
+      self.viewer = None
+
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
 # class Truck():
 
-class Customer():
-  """
-  A customer is an entity on the road network. They will travel
-   within the road network 'randomly' by selecting a destination
-   node at random from those that are connected to a current node
-   by edges. They are mindless automatons.
-  Customers have a bank of supplies which they will slowly drain
-   over time. The 'greediness' of each customer specifies how
-   quickly they will drain their resources. Each supply starts
-   full (at 100) and then each time step that a customer is 'alive'
-   will drain by the greediness level. The default supply limit is
-   100, but can be changed to emulate less well supplied customers.
-  Supply classes:
-   Class  1: Food
-   Class  2: Clothing
-   Class  3: Fuel
-   Class  4: Building Material
-   Class  5: Ammunition
-   Class  6: Fun supplies
-   Class  7: Large items
-   Class  8: Medical Supplies
-   Class  9: Repair items
-   Class 10: Miscellaneous
-  """
-  def __init__(self,
-               nodes: dict,
-               num_classes: int = 10,
-               supply_limit: float = 100.0,
-               greediness_mu: float = 1.0,
-               greediness_sigma: float = 0.5,
-               seed = None):
-    self.target = None
-    self.nodes = nodes
-    self.start_location = random.choices([x for x in self.nodes])[0]
-    # Limit speed for customers.
-    self.speed = 0.01
-    self.supply_classes = num_classes
-    self.supply_limit = supply_limit
-    self.supply_rate = np.random.normal(greediness_mu,greediness_sigma,size=(num_classes))
-    self.reset()
-  def __repr__(self):
-    return(", ".join(["{}".format(x) for x in self.supplies]))
-  def reset(self):
-    self.location = self.start_location
-    self.supplies = np.full((self.supply_classes),0.5 * self.supply_limit)
- 
-  def happiness(self):
-    """
-    Simple linear happiness function. What proportion of supply am I missing?
-    """
-    return(np.sum(self.supplies) / self.supply_classes / self.supply_limit)
 
-  def move(self):
-    if not self.target:
-      # Pick a node to move towards.
-      self.target = random.choices([x for x in self.nodes[self.location]])[0]
-    # If the unit has 'fuel' (the first element of supply)
-    if self.supplies[0] > 0:
-      # Move towards that node from current position.
-      travel = [x-y for x,y in zip(self.target,self.location)]
-      if travel[0] > 0:
-        # Need to traverse on the x.
-        dX = min(travel[0],self.speed)
-      if travel[1] > 0:
-        # Need to traverse on the y.
-        dY = min(travel[1],self.speed)
-      self.location = (self.location[0] + dX, self.location[1] + dY)
-      # Decrement fuel for traveling.
-      self.supplies[0] -= sqrt(dX**2 + dY**2) * 10
-    # Check to see if that node is reached and if so unassign the target.
-    if all(np.isclose(self.location,self.target)):
-      self.target = None
 
-def splitSquare(x):
-  """
-  Given a simple square x of depth x[0] (int)
-  and an array of X,Y coordinates of
-  x[1] = x minimum
-  x[2] = x maximum
-  x[3] = y minimum
-  x[4] = y maximum
-  create an array of four new squares as NW,NE,SW,SE
-  from an even subdivision of the original square
-  with depth += 1.
-  This is intended to be used inside the quadtree implementation
-  used when making a logistics environment.
-  """
-  d = x[0]
-  d += 1
-  xmin = x[1]
-  xmax = x[2]
-  ymin = x[3]
-  ymax = x[4]
-  NW = [d, xmin, xmin+(xmax-xmin)/2.0, ymin+(ymax-ymin)/2.0, ymax]
-  NE = [d, xmin+(xmax-xmin)/2.0, xmax, ymin+(ymax-ymin)/2.0, ymax]
-  SW = [d, xmin, xmin+(xmax-xmin)/2.0, ymin, ymin+(ymax-ymin)/2.0]
-  SE = [d, xmin+(xmax-xmin)/2.0, xmax, ymin, ymin+(ymax-ymin)/2.0]
-  out = list([NW,NE,SW,SE])
-  return(out)
 
-a = LogEnv()
+seed = 600
+a = LogEnv(seed=seed)
 a.render()
-sleep(3)
+for _ in range(1000):
+  a.step(0)
+  a.render()
+  # sleep(0.001)
+a.close()
+print("Done")
