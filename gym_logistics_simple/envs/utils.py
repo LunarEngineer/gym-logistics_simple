@@ -1,4 +1,4 @@
-from random import choice
+from random import choice, choices
 import numpy as np
 def splitSquare(x):
   """
@@ -39,3 +39,103 @@ def closest_node(node,nodes):
   deltas = nodearr - node
   dist_2 = np.einsum('ij,ij->i', deltas, deltas)
   return tuple(nodearr[np.argmin(dist_2)])
+
+def manhattanDistance(nodeA,nodeB):
+  """
+  Calculating the l1 norm, or the manhattan distance is sufficient
+  for distance calculations in this environment, as all roads are
+  laid out NS or EW and this *is* the distance that would have
+  to be traveled.
+  """
+  return(sum([abs(x-y) for x,y in zip(nodeA,nodeB)]))
+
+def makeRoadNetwork(n,r,m):
+    """ Creates a road network for the logistics environment
+
+    Quadtree: https://www.davideisenstat.com/cv/Eisenstat11.pdf
+    Note that this is my interpretation of his method and 
+     could be wrong. He is not clear in what the subscripts are
+     intended to be though my interpretation is that for the
+     formula $Pr(Split_n = v | Leaves_n)\defined\frac{r^|v|}{\sum_{w\inLeaves_n}r^|w|}$
+     v is the depth of that particular node while w is *also* the
+     depth of that particular node. This is simply a weighted
+     probability distribution that more strongly weights deeply
+     nested nodes.
+     This MIGHT have to be seeded.
+
+    Parameters
+    ----------
+    n : int, default 20
+        The number of new intersections to be added. (i.e.)
+        the number of times the unit square is split beyond
+        the first time.
+    r : float, default 1.0
+        A parameter used to force the tree to favor grids of
+        a certain size. r < 1 favors big squares, r > 1 favors
+        small squares, r = 1 is uniform.
+    m : float, default 10.0
+        This is used to define the extent of the created map
+
+    Returns
+    dict
+        a dictionary of nodes with connecting nodes keyed by node
+        coordinates
+    -------
+    """
+    # Each node in this network is a subordinate square
+    # Each square is initially represented by 
+    # [Depth, xmin, xmax, ymin, ymax]
+    #  and there is initially a square of four squares.
+    # Initially there are 9 nodes. Every split adds 5 nodes.
+    network = list([[1, 0.0, 0.5 * m, 0.5 * m, 1.0 * m],
+                    [1, 0.5 * m, 1.0 * m, 0.5 * m, 1.0 * m],
+                    [1, 0.0, 0.5 * m, 0.0, 0.5 * m],
+                    [1, 0.5 * m, 1.0 * m, 0.0, 0.5 * m]])
+    probs = [r**x[0] for x in network]
+    while len(network) < n:
+      # Every split adds 5 intersections
+      wts = [r**x[0] for x in network]
+      popInd = choices(range(len(network)),weights=wts)[0]
+      subBoxes = splitSquare(network.pop(popInd))
+      network += subBoxes
+    node_dict = {}
+    for i in range(len(network)):
+      # Every corner of this square is an intersection / node
+      # Southwest corner
+      SW = (network[i][1],network[i][3])
+      # Southeast corner
+      SE = (network[i][2],network[i][3])
+      # Northwest corner
+      NW = (network[i][1],network[i][4])
+      # Northeast corner
+      NE = (network[i][2],network[i][4])
+      connected = {SW:[NW,SE],
+                   SE:[NE,SW],
+                   NW:[NE,SW],
+                   NE:[NW,SE]}
+      for corner in [SW,SE,NW,NE]:
+        for other_corner in connected[corner]:
+          if corner in node_dict:
+            if other_corner not in node_dict[corner]:
+              node_dict[corner].append(other_corner)
+          else:
+            node_dict[corner] = [other_corner]
+    return(node_dict)
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+            >>> angle_between((1, 0, 0), (0, 1, 0))
+            1.5707963267948966
+            >>> angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            >>> angle_between((1, 0, 0), (-1, 0, 0))
+            3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))

@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from math import sqrt, copysign
-from helpers import closest_node, makeName
+from utils import closest_node, makeName, manhattanDistance, unit_vector, angle_between
 class Truck():
   """
   A truck is an entity on the road network. They will travel
@@ -33,7 +33,10 @@ class Truck():
                nodes: dict,
                depot: tuple = (0.50,0.5),
                supply_limit: float = 100.0,
-               allowed_supply: list = None,
+               allowed_supply: list = np.ones(10),
+               supply_priority: list = np.full((10),0.1),
+               speed: float = 0.1,
+               dispatch_cost: float = -1,
                seed: int = None,
                name: str = None):
     if name:
@@ -41,79 +44,182 @@ class Truck():
     else:
       name = makeName()
 
-    
     self.nodes = nodes
     self.depot = depot
     self.start_location = depot
-    # Limit speed for trucks.
-    self.speed = 0.1
+    self.speed = speed
     # Supply information
-    self.allowed_supply = allowed_supply
     self.supply_limit = supply_limit
+    self.allowed_supply = np.array(allowed_supply)
+    self.initial_supply_priority = supply_priority
+    self.dispatch_cost = dispatch_cost
     self.reset()
 
   def __repr__(self):
-    return(" : ".join(["{} - {}".format(x,y) for x,y in zip(self.supply_priority,self.supplies)]))
+    selfStr = """
+    Truck: {}
+      Supplies: {}
+      Priority: {}
+      Location: {}
+    """.format(self.name,self.supplies,self.supply_priority,self.location)
+    return(selfStr)
 
+  def closest_node(self):
+    return(closest_node(self.location,[k for k in self.nodes.keys()]))
   def reset(self):
     # Keep track of mileage
     self.movement = (0,0)
-    self.miles_traveled = 0
+    self.distance_traveled = 0
     # Initial location
     self.location = self.start_location
-    # Set initial supply priority
-    self.supplies = [0. for n in self.allowed_supply]
-    self.supply_priority = [x / sum(self.allowed_supply) for x in self.allowed_supply]
+    # Set the supply priority to the initial priority
+    self.changePriority(self.initial_supply_priority)
+    # Fill the truck to start
+    self.refill()
     # Clean slate for customers
-    self.missions = []
+    self.mission = None
     self.customer = None
     # These are used for movement tracking
-    self.to_node = None
-    self.from_node = None
+    # self.to_node = None
+    # self.from_node = None
 
   def refill(self):
-    print('do me')
-    # Are we close to home?
-    # If so, fill up according to the supply priority
-  def supply(self,cust):
-    print("do me")
-  def fillOrder(self,target):
-    print("do me")
+    # Draw supplies according to the supply priority.
+    self.supplies = np.array([x*y*self.supply_limit for x,y in zip(self.allowed_supply,self.supply_priority)])
+
+  def changePriority(self,priority):
+    """
+    This is called when an agent executes an action and updates the
+    supply priority for a single truck. This is used in real life to
+    fill a truck entirely with cigarettes, for example. There is NO
+    check to ensure an agent doesn't set a high priority for food
+    if the vehicle is a fuel tanker. The agent just won't be highly
+    rewarded because the tanker cannot fulfill any needs. The only
+    checking that is done here is to ensure that this is a unit
+    vector.
+    """
+    self.supply_priority = np.array(priority / sum(priority))
+
+  def fillOrder(self,customer):
+    """
+    A customer has a supply limit for every supply they *could* have
+    Customers in this environment are *greedy* and will take
+    everything they can to fill up to their supply limit.
+    A customer is a customer object and therefore customer
+    supplies is a numpy array
+    """
+    # What supplies does the customer need?
+    customer_deficit = customer.supply_limit - customer.supplies
+    # This is, in effect, bitmasking to only the supplies which
+    #  the truck is allowed to carry.
+    customer_request = customer_deficit * self.allowed_supply
+    # Start an empty array
+    customer_supplied = np.zeros(len(customer_request))
+    for i in range(len(customer_supplied)):
+      # and for each supply class check
+      if customer_request[i] > self.supplies[i]:
+        # if the customer is asking for more than the truck can give
+        # and if so limit them to reality.
+        customer_supplied[i] = self.supplies[i]
+      else:
+        # otherwise give them what they ask for.
+        customer_supplied[i] = customer_request[i]
+    # Update the trucks supplies appropriately.
+    self.supplies -= customer_supplied
+    # Update the customers supplies appropriately.
+    customer.supplies += customer_supplied
+
 
   def move(self):
-    # Does the unit have a customer to service?
-    if len(self.missions) > 0:
+    """
+    A customer is passed to the truck and the truck blindly pursues
+    """
+    self.movement = (0,0)
+    if self.customer:
+      print("{} is headed to service {}".format(self.name,self.customer))
       # Is there a current customer?
-      if not self.customer:
-        # What is my next mission? RTB?
-        if self.missions[0] == "RTB":
-          self.customer = self.depot
+      # What is my next mission? RTB?
+      if self.customer == "RTB":
+        self.customer = self.depot
+      # Now that we have a mission, where are we going?
+      if self.customer == self.depot:
+        location = self.depot
+      else:
+        location = self.customer.location
+      # What edges can we move on?
+      n1 = self.closest_node()
+      print("{} is {} from n1 ({}) at {}".format(self.name,manhattanDistance(self.location,n1),n1,self.location))
+      # In order to find out, first check to see if we are ON a node
+      if manhattanDistance(self.location,n1) < 1e-3:
+        # And if so, we can travel on any edge attached to that node
+        n = self.nodes[n1]
+        # Which node would minimize distance to the customer?
+        d = [manhattanDistance(location,x) for x in n]
+        n2 = n[np.argmin(d)]
+        print("{} is VERY close to n1 and".format(self.name))
+        # Now we have a start location (n1) and an end location (n2)
+      else:
+        # Otherwise we can only travel on the edge that we are ON
+        # Out of the nodes attached to the closest node, which is
+        #  the closest to us. This has the handy benefit of giving
+        #  us the edge we are on.
+        # Quickly downselect to only those nodes which share the same x or y axis
+        n = [x for x in self.nodes[n1] if any([np.isclose(x,y) for x,y in zip(x,self.location)])]
+        print("{} is thinking of traveling to {}".format(self.name,n))
+        # Build position vectors for all of these.
+        #p = [(x[0]-self.location[0],x[1]-self.location[1]) for x in n]
+        # print("{} calculates position vectors to be {}".format(self.name,p))
+        #p1 = (n1[0]-self.location[0],n1[1]-self.location[1])
+        d = [manhattanDistance(location,x) for x in n]
+        #d = [angle_between(p1,x) for x in p]
+        print("{} calculates distances to be {}".format(self.name,d))
+        n2 = n[np.argmin(d)]
+        # Which direction is the customer in?
+        direction = [x-y for x,y in zip(location,self.location)]
+        print("{} sees the customer in the direction {}".format(self.name,direction))
+        # Which node is in that direction? Only the first one
+        #  needs to be tested because it can only be one of two.
+        n1D = [x-y for x,y in zip(n1,self.location)]
+        if np.dot(n1D,direction)>0:
+          # If the dot product of the position vectors from the
+          #  truck to n1 and from the truck to the customer
+          #  happen to align then the dot product will be positive
+          n2 = n1
+      print("{} is {} from n2 ({})".format(self.name,manhattanDistance(self.location,n2),n2))
+      # Let's do a final check for distance
+      d = [manhattanDistance(self.location,x) for x in [location,n2]]
+      d = d + [self.speed]
+      print("{} does a sanity check on location,n2,and self.speed {} and picks {}".format(self.name,d,min(d)))
+      d = min(d)
+      if d > 1e-3:
+        # Now there is an edge to move on defined by self.loc and n2
+        e = [x-y for x,y in zip(n2,self.location)]
+        print("{} will travel on edge {}".format(self.name,e))
+        self.distance_traveled += d
+        # Break this into X and Y components
+        # normalize the distance vector
+        dX,dY = d * (e/np.linalg.norm(e))    
+        # EXECUTE THE MOVE ORDER!
+        self.movement = (dX,dY)
+        self.location = (self.location[0] + dX, self.location[1] + dY)
+      # Am I within kissing distance of my customer after moving?
+      if manhattanDistance(self.location,location) < 1e-3:
+        # Is my mission to RTB?
+        if self.customer == "RTB":
+          # If so, refuel / restock.
+          self.refill()
+          # Reset the odometer!
+          self.distance_traveled = 0
+        # Otherwise
         else:
-          self.customer = self.missions[0]
-      # Now that we have a mission
-      if not self.from_node:
-        # What is the closest node to us?
-        self.from_node = closest_node(self.location,[k for k in self.nodes.keys()])
-      if not self.to_node:
-        # Out of the nodes that are reachable from the from_node,
-        #  which is the closest to the customer? Manhattan distance
-        #  is fine for this.
-        if self.customer == self.depot:
-          location = self.depot
-        else:
-          location = self.customer.location
-        n = np.argmax([sum(abs(x[0]-location[0]),abs(x[1]-location[1])) for x in self.nodes[from_node]])
-        self.to_node = self.nodes[from_node][n]
-      # Now that there is a from node and a to node, move in the direction of the customer.
-      # 
+          print(self.customer)
+          self.fillOrder(self.customer)
+        # And now that the customer is 'fulfilled', dump them!
+        self.customer = None
 
-
-
-a = list()
-
-a.append("B")
-a.append("C")
-print(a)
-print(a[0])
-print(a.pop(0))
-print(a)
+  def getCost(self):
+    return(sum([x for x in self.movement])*self.dispatch_cost)
+  def getState(self):
+    loc = np.array(self.location).reshape(1,2)
+    sup = self.supplies.reshape(1,len(self.supplies))
+    return(np.concatenate((loc,sup),axis=1))

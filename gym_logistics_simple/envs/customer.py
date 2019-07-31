@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from math import sqrt, copysign
-from helpers import closest_node, makeName
+from utils import closest_node, makeName
 class Customer():
   """
   A customer is an entity on the road network. They will travel
@@ -49,7 +49,7 @@ class Customer():
     self.supply_rate = np.random.normal(greediness_mu,greediness_sigma,size=(num_classes))
     self.reset()
   def __repr__(self):
-    return(", ".join(["{}".format(x) for x in self.supplies]))
+    return("{} - {}".format(self.name,self.location))
   def reset(self):
     self.location = self.start_location
     self.supplies = np.full((self.supply_classes),0.5 * self.supply_limit)
@@ -75,22 +75,10 @@ class Customer():
     if self.supplies[0] > 0:
       # Move towards that node from current position.
       travel = [x-y for x,y in zip(self.target,self.location)]
-      # if abs(travel[0]) > 0:
-        # Need to traverse on the x.
       dX = copysign(min(abs(travel[0]),self.speed),travel[0])
-      # else:
-      #   dX = 0
-      # if travel[1] > 0:
-      #   # Need to traverse on the y.
-      #   dY = min(travel[1],self.speed)
-      # else:
-      #   dY = 0
       dY = copysign(min(abs(travel[1]),self.speed),travel[1])
       self.movement = (dX,dY)
       self.location = (self.location[0] + dX, self.location[1] + dY)
-      # Decrement fuel for traveling.
-      # self.supplies[0] = max(0, self.supplies[0] - sqrt(dX**2 + dY**2))
-    # Check to see if that node is reached and if so unassign the target.
     # debugStr = """
     # Debug String:
     #     Customer: {}
