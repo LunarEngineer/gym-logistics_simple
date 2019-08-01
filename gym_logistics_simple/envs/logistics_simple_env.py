@@ -250,27 +250,10 @@ class LogEnv(gym.Env):
     custReward = sum([self.customers[x].happiness() for x in self.customers])
     # and penalized for how much their trucks are driving.
     truckCost = sum([self.trucks[x].getCost() for x in self.trucks])
-    return(custReward + truckCost)
-
-
-# Here goes a random agent
-seed = 600
-env = LogEnv(seed=seed)
-env.render()
-i = 0
-done = False
-truckorders = np.full((4,11),1,'uint8')
-
-while not done and i < 1000:
-  # How many trucks? 4. How many supply classes? 10.
-  # How many customers? 8.
-  # Actions need to be a 4x11 numpy array of uint8<9
-  a = truckorders
-  # print("Environment is in step: {}".format(i))
-  s, r, done, _ = env.step(a)
-  print(r)
-  env.render()
-  i+=1
-  # sleep(0.1)
-env.close()
-print("Done")
+    debugStr = """
+    Step {}
+      Customer Reward {}
+      Truck Expenditure {}
+    """.format(self.current_step,custReward,truckCost)
+    print(debugStr)
+    return(custReward - truckCost)

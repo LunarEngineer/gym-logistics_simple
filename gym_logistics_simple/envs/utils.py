@@ -218,7 +218,7 @@ def onEdge(nodes,node):
   farNodes = nodes[nearNode]
   dFar = [[y-z for y,z in zip(x,nearNode)] for x in farNodes]
   farNode = [x for x,y in zip(farNodes,dFar) if np.dot(y,dN)>0][0]
-  return nearNode, farNode
+  return [nearNode, farNode]
 
 def dijkstra(nodes,location,target):
   """
@@ -245,7 +245,9 @@ def dijkstra(nodes,location,target):
     nodes[target] = targetNodes
   if not location in nodes:
     nodes[location] = locationNodes
-  if list(nodes[target]).sort()==list(nodes[location]).sort():
+  #print("Nodes Target {} == Nodes Location {} : {}".format(nodes[target],nodes[location],nodes[target]==nodes[location]))
+  #print("Nodes Target sort {} == Nodes Location sort {}".format(nodes[target].sort(),nodes[location].sort()))
+  if len(set(nodes[target]+nodes[location]))<3:
     # Clean up
     if targetCleanUp:
       for node in targetNodes:
@@ -386,3 +388,4 @@ def testCase():
   print("\tMovement Order should be East")
 
 
+testCase()

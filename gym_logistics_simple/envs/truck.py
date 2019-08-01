@@ -56,6 +56,16 @@ class Truck():
     self.allowed_supply = np.array(allowed_supply)
     self.initial_supply_priority = supply_priority
     self.dispatch_cost = dispatch_cost
+    # debugStr = """
+    # Truck: {}
+    #   Initialized with
+    #   Supply limit:    {}
+    #   Allowed supply:  {}
+    #   Supply Priority: {}
+    #   Speed:           {}
+    #   Dispatch Cost:   {}
+    # """.format(self.name,self.supply_limit,self.allowed_supply,self.initial_supply_priority,self.speed,self.dispatch_cost)
+    # print(debugStr)
     self.reset()
 
   def __repr__(self):
@@ -170,7 +180,11 @@ class Truck():
         self.customer = None
 
   def getCost(self):
-    return(sum([x for x in self.movement])*self.dispatch_cost)
+    # debugStr = """
+    # Movement is {} and dispatch cost is {}
+    # """.format(self.movement,self.dispatch_cost)
+    # print(debugStr)
+    return(sum([abs(x) for x in self.movement])*self.dispatch_cost)
   def getState(self):
     loc = np.array(self.location).reshape(1,2)
     sup = self.supplies.reshape(1,len(self.supplies))
