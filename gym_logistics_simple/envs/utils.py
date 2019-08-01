@@ -386,6 +386,3 @@ def testCase():
   print("\tDjikstra output {}".format(dijkstra(nodes,location,target)))
   print("\tMovement Order {}".format(moveOnGrid(nodes,location,target,0.1)))
   print("\tMovement Order should be East")
-
-
-testCase()

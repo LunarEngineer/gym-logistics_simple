@@ -1,1 +1,1 @@
-from gym.envs.logistics_simple_env import LogEng
+from gym_logistics_simple.envs.logistics_simple_env import LogEnv

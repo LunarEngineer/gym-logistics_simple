@@ -7,9 +7,9 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 
 # Local import
-from customer import Customer
-from truck import Truck
-from utils import splitSquare, makeName, makeRoadNetwork
+from gym_logistics_simple.envs.customer import Customer
+from gym_logistics_simple.envs.truck import Truck
+from gym_logistics_simple.envs.utils import splitSquare, makeName, makeRoadNetwork
 
 FPS = 50
 SCALE = 30.0

@@ -1,9 +1,7 @@
 import random
 import numpy as np
 from math import sqrt, copysign
-from utils import moveOnGrid
-from utils import makeName
-from utils import manhattanDistance
+from gym_logistics_simple.envs.utils import moveOnGrid, makeName, manhattanDistance
 #closest_node, makeName, manhattanDistance, unit_vector, angle_between
 class Truck():
   """

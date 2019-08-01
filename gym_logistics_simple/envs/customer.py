@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from math import sqrt, copysign
-from utils import closest_node, makeName
+from gym_logistics_simple.envs.utils import closest_node, makeName
 class Customer():
   """
   A customer is an entity on the road network. They will travel
