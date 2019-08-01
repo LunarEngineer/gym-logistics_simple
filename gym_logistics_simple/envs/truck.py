@@ -1,7 +1,10 @@
 import random
 import numpy as np
 from math import sqrt, copysign
-from utils import closest_node, makeName, manhattanDistance, unit_vector, angle_between
+from utils import moveOnGrid
+from utils import makeName
+from utils import manhattanDistance
+#closest_node, makeName, manhattanDistance, unit_vector, angle_between
 class Truck():
   """
   A truck is an entity on the road network. They will travel
@@ -135,8 +138,9 @@ class Truck():
     A customer is passed to the truck and the truck blindly pursues
     """
     self.movement = (0,0)
+    debug = False
     if self.customer:
-      print("{} is headed to service {}".format(self.name,self.customer))
+      
       # Is there a current customer?
       # What is my next mission? RTB?
       if self.customer == "RTB":
@@ -146,62 +150,9 @@ class Truck():
         location = self.depot
       else:
         location = self.customer.location
-      # What edges can we move on?
-      n1 = self.closest_node()
-      print("{} is {} from n1 ({}) at {}".format(self.name,manhattanDistance(self.location,n1),n1,self.location))
-      # In order to find out, first check to see if we are ON a node
-      if manhattanDistance(self.location,n1) < 1e-3:
-        # And if so, we can travel on any edge attached to that node
-        n = self.nodes[n1]
-        # Which node would minimize distance to the customer?
-        d = [manhattanDistance(location,x) for x in n]
-        n2 = n[np.argmin(d)]
-        print("{} is VERY close to n1 and".format(self.name))
-        # Now we have a start location (n1) and an end location (n2)
-      else:
-        # Otherwise we can only travel on the edge that we are ON
-        # Out of the nodes attached to the closest node, which is
-        #  the closest to us. This has the handy benefit of giving
-        #  us the edge we are on.
-        # Quickly downselect to only those nodes which share the same x or y axis
-        n = [x for x in self.nodes[n1] if any([np.isclose(x,y) for x,y in zip(x,self.location)])]
-        print("{} is thinking of traveling to {}".format(self.name,n))
-        # Build position vectors for all of these.
-        #p = [(x[0]-self.location[0],x[1]-self.location[1]) for x in n]
-        # print("{} calculates position vectors to be {}".format(self.name,p))
-        #p1 = (n1[0]-self.location[0],n1[1]-self.location[1])
-        d = [manhattanDistance(location,x) for x in n]
-        #d = [angle_between(p1,x) for x in p]
-        print("{} calculates distances to be {}".format(self.name,d))
-        n2 = n[np.argmin(d)]
-        # Which direction is the customer in?
-        direction = [x-y for x,y in zip(location,self.location)]
-        print("{} sees the customer in the direction {}".format(self.name,direction))
-        # Which node is in that direction? Only the first one
-        #  needs to be tested because it can only be one of two.
-        n1D = [x-y for x,y in zip(n1,self.location)]
-        if np.dot(n1D,direction)>0:
-          # If the dot product of the position vectors from the
-          #  truck to n1 and from the truck to the customer
-          #  happen to align then the dot product will be positive
-          n2 = n1
-      print("{} is {} from n2 ({})".format(self.name,manhattanDistance(self.location,n2),n2))
-      # Let's do a final check for distance
-      d = [manhattanDistance(self.location,x) for x in [location,n2]]
-      d = d + [self.speed]
-      print("{} does a sanity check on location,n2,and self.speed {} and picks {}".format(self.name,d,min(d)))
-      d = min(d)
-      if d > 1e-3:
-        # Now there is an edge to move on defined by self.loc and n2
-        e = [x-y for x,y in zip(n2,self.location)]
-        print("{} will travel on edge {}".format(self.name,e))
-        self.distance_traveled += d
-        # Break this into X and Y components
-        # normalize the distance vector
-        dX,dY = d * (e/np.linalg.norm(e))    
-        # EXECUTE THE MOVE ORDER!
-        self.movement = (dX,dY)
-        self.location = (self.location[0] + dX, self.location[1] + dY)
+      dX,dY = moveOnGrid(self.nodes,self.location,location,self.speed)
+      self.movement = (dX,dY)
+      self.location = (self.location[0] + dX, self.location[1] + dY)
       # Am I within kissing distance of my customer after moving?
       if manhattanDistance(self.location,location) < 1e-3:
         # Is my mission to RTB?
@@ -212,7 +163,8 @@ class Truck():
           self.distance_traveled = 0
         # Otherwise
         else:
-          print(self.customer)
+          if debug:
+            print(self.customer)
           self.fillOrder(self.customer)
         # And now that the customer is 'fulfilled', dump them!
         self.customer = None

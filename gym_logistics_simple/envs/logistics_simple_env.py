@@ -237,10 +237,10 @@ class LogEnv(gym.Env):
         truck.customer = self.customers[customers[customer_number]]
       elif customer_number == len(self.customers):
         truck.customer = "RTB"
-    debugString = """
-    Truck 1: {}
-    """.format(self.trucks[trucks[i]])
-    print(debugString)
+    # debugString = """
+    # Truck 1: {}
+    # """.format(self.trucks[trucks[i]])
+    # print(debugString)
     # Move the trucks.
     for truck in self.trucks:
       self.trucks[truck].move()
@@ -253,9 +253,6 @@ class LogEnv(gym.Env):
     return(custReward + truckCost)
 
 
-
-
-
 # Here goes a random agent
 seed = 600
 env = LogEnv(seed=seed)
@@ -263,6 +260,7 @@ env.render()
 i = 0
 done = False
 truckorders = np.full((4,11),1,'uint8')
+
 while not done and i < 1000:
   # How many trucks? 4. How many supply classes? 10.
   # How many customers? 8.
@@ -270,6 +268,7 @@ while not done and i < 1000:
   a = truckorders
   # print("Environment is in step: {}".format(i))
   s, r, done, _ = env.step(a)
+  print(r)
   env.render()
   i+=1
   # sleep(0.1)
