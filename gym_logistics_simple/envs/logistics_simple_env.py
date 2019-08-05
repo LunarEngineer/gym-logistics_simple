@@ -37,7 +37,7 @@ class LogEnv(gym.Env):
                supply_classes: int = 10,
                truck_framework: dict = None,
                seed: int = None,
-               maxSteps = 10000):
+               maxSteps = 1000):
     """
     Parameters
     ----------

@@ -225,6 +225,10 @@ def dijkstra(nodes,location,target):
   Shamelessly borrowed from Red Blob Games.
   https://www.redblobgames.com/pathfinding/a-star/implementation.html
   """
+  # Let's do *one* very small sanity check to see if the location and
+  #  the target are identical. If so, just return the target.
+  if manhattanDistance(location,target) < 1e-3:
+    return([target])
   # One thing that needs to be preloaded is that nodes needs to be
   #  updated to include the target.
   # Add the target nodes to the network; we can clean them up when

@@ -164,7 +164,7 @@ class Truck():
       # Am I within kissing distance of my customer after moving?
       if manhattanDistance(self.location,location) < 1e-3:
         # Is my mission to RTB?
-        if self.customer == "RTB":
+        if self.customer == self.depot:
           # If so, refuel / restock.
           self.refill()
           # Reset the odometer!
