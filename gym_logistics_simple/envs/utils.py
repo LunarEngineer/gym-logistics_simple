@@ -4,6 +4,9 @@ import numpy as np
 import heapq
 
 class PriorityQueue():
+  """
+  This class is used in the Dijkstra implementation
+  """
   def __init__(self):
     self.elements = []
   def empty(self):

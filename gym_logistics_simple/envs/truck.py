@@ -45,6 +45,7 @@ class Truck():
     else:
       name = makeName()
 
+    self.seed = seed
     self.nodes = nodes
     self.depot = depot
     self.start_location = depot
@@ -77,6 +78,7 @@ class Truck():
 
   def closest_node(self):
     return(closest_node(self.location,[k for k in self.nodes.keys()]))
+
   def reset(self):
     # Keep track of mileage
     self.movement = (0,0)
@@ -160,6 +162,7 @@ class Truck():
         location = self.customer.location
       dX,dY = moveOnGrid(self.nodes,self.location,location,self.speed)
       self.movement = (dX,dY)
+      self.distance_traveled += abs(dX)+abs(dY)
       self.location = (self.location[0] + dX, self.location[1] + dY)
       # Am I within kissing distance of my customer after moving?
       if manhattanDistance(self.location,location) < 1e-3:
@@ -167,8 +170,6 @@ class Truck():
         if self.customer == self.depot:
           # If so, refuel / restock.
           self.refill()
-          # Reset the odometer!
-          self.distance_traveled = 0
         # Otherwise
         else:
           if debug:

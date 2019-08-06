@@ -34,6 +34,7 @@ class Customer():
                greediness_sigma: float = 0.5,
                seed: int = None,
                name: str = None):
+    self.seed = seed
     if name:
       self.name = name
     else:

@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 #import pandas as pd
-#import random
+import random
 from time import sleep
 from gym import error, spaces, utils
 from gym.utils import seeding
@@ -16,8 +16,6 @@ SCALE = 30.0
 
 VIEWPORT_W = 640
 VIEWPORT_H = 480
-
-
 
 class LogEnv(gym.Env):
   """
@@ -85,7 +83,7 @@ class LogEnv(gym.Env):
                                           greediness_mu=5./FPS,
                                           greediness_sigma=0.5/FPS,
                                           name=custname,
-                                          seed=seed)
+                                          seed=random.randint(0,100000))
     # Create all the trucks
     if truck_framework is None:
       # This basic framework gives fuel to the tanker
@@ -95,25 +93,25 @@ class LogEnv(gym.Env):
         "Snorri's Datsun":{
           "allowed_supplies": [0,1,1,1,1,1,0,1,1,1],
           "supply_limit": 500.,
-          "dispatch_cost": -2.,
-          "speed": 0.1
+          "dispatch_cost": -8.,
+          "speed": 0.2
         },
         "Jorgen's Nissan":{
           "allowed_supplies": [0,1,1,1,1,1,0,1,1,1],
           "supply_limit": 500.,
-          "dispatch_cost": -2.,
-          "speed": 0.1
+          "dispatch_cost": -8.,
+          "speed": 0.2
         },
         "Glinda's Tanker":{
           "allowed_supplies": [1,0,0,0,0,0,0,0,0,0],
           "supply_limit": 2000.,
-          "dispatch_cost": -10.,
+          "dispatch_cost": -20.,
           "speed": 0.05
         },
         "Jake's Semi":{
           "allowed_supplies": [0,1,1,1,1,1,1,1,1,1],
           "supply_limit": 2000.,
-          "dispatch_cost": -10.,
+          "dispatch_cost": -20.,
           "speed": 0.05
         }
       }
@@ -130,7 +128,8 @@ class LogEnv(gym.Env):
                                      allowed_supply = supply,
                                      supply_priority = supply_priority,
                                      dispatch_cost = cost,
-                                     seed = seed,
+                                     speed = speed,
+                                     seed=random.randint(0,100000),
                                      name = truckname)
 
     self.observation_space = spaces.Box(
@@ -200,6 +199,17 @@ class LogEnv(gym.Env):
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
 
+  def get_information(self):
+    """
+    This function is intended to be used to pull information to
+    compare agents and agent effectiveness.
+    """
+    # Get information about trucks; the only truly necessary
+    #  information is miles traveled.
+    outInfo = {"Truck: {}".format(t):self.trucks[t].distance_traveled for t in self.trucks}
+    # Get information about customers
+    outInfo.update({"Customer: {}".format(c):self.customers[c].happiness() for c in self.customers})
+    return(outInfo)
   def _next_observation(self):
     # I need customer status
     custState = np.vstack([self.customers[x].getState() for x in self.customers])
@@ -246,14 +256,18 @@ class LogEnv(gym.Env):
       self.trucks[truck].move()
 
   def _calculate_reward(self):
+    """
+    Rewards are given based on how little the trucks move
+    coupled with how well supplied customers are.
+    """
     # At any given time the agent is rewarded for how happy their customers are
     custReward = sum([self.customers[x].happiness() for x in self.customers])
     # and penalized for how much their trucks are driving.
     truckCost = sum([self.trucks[x].getCost() for x in self.trucks])
-    debugStr = """
-    Step {}
-      Customer Reward {}
-      Truck Expenditure {}
-    """.format(self.current_step,custReward,truckCost)
-    print(debugStr)
-    return(custReward - truckCost)
+    # debugStr = """
+    # Step {}
+    #   Customer Reward {}
+    #   Truck Expenditure {}
+    # """.format(self.current_step,custReward,truckCost)
+    # print(debugStr)
+    return(custReward +truckCost)
