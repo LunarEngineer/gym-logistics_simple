@@ -158,6 +158,7 @@ class LogEnv(gym.Env):
       self.customers[customer].reset()
     for truck in self.trucks:
       self.trucks[truck].reset()
+    return(self._next_observation())
 
   def render(self, mode='human'):
     from gym.envs.classic_control import rendering
